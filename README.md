@@ -22,7 +22,7 @@ Der Raspberry Pi arbeitet als **WLAN Access Point** ("Datenkrake") und spannt ei
 | Einstellung | Wert |
 |-------------|------|
 | **WLAN SSID** | Datenkrake |
-| **WLAN Passwort** | datenkrake2024 |
+| **WLAN Passwort** | DatenkrakeAP |
 | **Netzwerk** | 10.0.0.0/24 |
 | **Gateway (Pi)** | 10.0.0.1 |
 | **DHCP-Bereich** | 10.0.0.10 - 10.0.0.254 |
@@ -269,6 +269,23 @@ sudo systemctl restart dnsmasq
 cd ~/Datenkrake-Container/Raspberry/compose
 docker compose ps
 docker compose logs -f
+```
+
+### Notfall-Zugang (wenn VNC nicht funktioniert)
+
+Falls du nicht mehr auf den Pi kommst:
+
+| Methode | Anleitung |
+|---------|-----------|
+| **SSH (empfohlen)** | Mit "Datenkrake" WLAN verbinden → `ssh pi@10.0.0.1` |
+| **Ethernet** | Pi per LAN-Kabel an Router, IP im Router nachschauen |
+| **Monitor+Tastatur** | Direkt am Pi anschließen |
+| **SD-Karte** | In PC einlegen, leere Datei `ssh` (ohne Endung) in boot-Partition |
+
+```bash
+# SSH-Zugang (funktioniert auch wenn VNC nicht läuft)
+ssh pi@10.0.0.1
+# Passwort: dein Pi-Passwort (Standard: raspberry)
 ```
 
 ---

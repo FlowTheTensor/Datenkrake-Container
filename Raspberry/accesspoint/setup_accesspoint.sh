@@ -17,7 +17,7 @@ AP_NETMASK="255.255.255.0"
 DHCP_RANGE_START="10.0.0.10"
 DHCP_RANGE_END="10.0.0.254"
 AP_SSID="Datenkrake"
-AP_PASSWORD="datenkrake2024"  # Mindestens 8 Zeichen
+AP_PASSWORD="DatenkrakeAP"  # Mindestens 8 Zeichen
 AP_CHANNEL="7"
 
 log() {
