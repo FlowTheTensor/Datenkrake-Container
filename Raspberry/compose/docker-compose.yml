@@ -48,6 +48,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    volumes:
+      # DHCP-Leases vom Host (für Geräte-Übersicht)
+      - /var/lib/misc:/var/lib/misc:ro
     depends_on:
       db:
         condition: service_healthy

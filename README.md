@@ -1,51 +1,85 @@
-# Datenkrake(Raspberry) sammelt Audiodaten von Arduino UNO Q zum Training eines KI-Modells zur Anomaliererkennung
+# Datenkrake - Audio-Spektrum Sammler für KI-Training
 
 Dieses Projekt erfasst Audio-Spektrumdaten über ein USB-Mikrofon/Webcam am Arduino UNO Q und sendet sie per MQTT an den Raspberry Pi "Datenkrake". Die Daten werden in einer MariaDB-Datenbank gespeichert und können für ML-Training (Anomalieerkennung) verwendet werden.
 
+Der Raspberry Pi arbeitet als **WLAN Access Point** ("Datenkrake") und spannt ein lokales Netzwerk ohne Internet auf.
+
 ## Komponenten
-- **Arduino UNO Q**: Erfasst Audio über USB-Mikrofon/Webcam (Linux-Teil), berechnet FFT-Spektrum. Website zur Spektrum-Visualisierung und Datensammlung mit Labels ("gut"/"schlecht"), Training des Modells und Anwendung des Modells
-- **Raspberry Pi**: in Containern: Mosquitto MQTT-Broker, MariaDB-Datenbank, Python-MQTT-Subscriber, Webserver zur Datenbankkontrolle
 
-
+| Komponente | Funktion |
+|------------|----------|
+| **Arduino UNO Q** | Audio-Erfassung, FFT-Analyse, Web-UI für Training & Inferenz |
+| **Raspberry Pi** | Access Point, MQTT-Broker, Datenbank, Dashboard |
+| **Docker Container** | Mosquitto, MariaDB, Python-Subscriber, Webserver |
 
 ![alt text](Images/image-1.png)
 ![alt text](Images/image.png)
 ![alt text](Images/image-2.png)
 ![alt text](Images/image-3.png)
 
+## Netzwerk-Konfiguration
+
+| Einstellung | Wert |
+|-------------|------|
+| **WLAN SSID** | Datenkrake |
+| **WLAN Passwort** | datenkrake2024 |
+| **Netzwerk** | 10.0.0.0/24 |
+| **Gateway (Pi)** | 10.0.0.1 |
+| **DHCP-Bereich** | 10.0.0.10 - 10.0.0.254 |
+| **VNC-Port** | 5900 |
+
+---
+
 ## Installation
-### Raspberry Pi
-#### Voraussetzungen
-- Raspberry Pi (empfohlen: Modell 4 mit 4 GB RAM oder mehr).
-- Raspberry Pi OS (64-Bit, basierend auf Debian).
-- Internetverbindung für Docker-Installation.
-- SD-Karte mit mindestens 16 GB (mehr für längeres Logging).
-1. **Repository klonen**: z.B. mit
-    ```bash
-    git clone https://github.com/FlowTheTensor/Datenkrake-Container.git 
-    ```
-2. **Script ausführen**: Navigiere zum Projektordner und führe das Setup-Script aus:
-   ```bash
-   sudo ./setup_iot_stack.sh
-   ```
-   - Dies installiert Docker und Docker Compose (falls nicht vorhanden).
-   - Erstellt notwendige Verzeichnisse und Volumes.
-   - Baut die Container-Images und startet die Services.
-3. Web-Interface: `http://datenkrake.local`
-4. Container prüfen: `docker compose ps`
 
-Speicher: Spektrumdaten sind größer (~2-5 KB pro Datensatz inkl. JSON-Spektrum).
-Rate: Typisch 1-5 Spektren pro Sekunde für ML-Datensammlung.
-Optimierungen: Bei hoher Last Indizes hinzufügen oder ältere Trainingsdaten archivieren.
+### 1. Raspberry Pi - Docker Stack
 
-### Arduino UNO Q
-1. USB-Mikrofon/Webcam anschließen. Wenn Dockingstation verwendet wird, darauf achten, dass sie PD untersützt und die Reihenfolge beim Anstecken beachten. Erst Dockingstation an Strom, dann Webcam an Dockingstation, dann Arduino UNO Q an Dockingstation. Dann meldet sich die Dockingstation als USB-Hub/Host an.
-2. Über Arduino App Lab die main.py hochladen und die requirements.txt im Ordner python anlegen und hochladen
-3. Per ssh auf den Arduino UNO Q verbinden und in den Ordner der App gehen. Dort in per nano app.yaml den Port 80 in die app.yaml schreiben, da man diese Datei über das Ardunio App Lab leider nicht ändern kann.
+```bash
+# Repository klonen
+git clone https://github.com/FlowTheTensor/Datenkrake-Container.git
+cd Datenkrake-Container/Raspberry
+
+# Docker-Stack installieren und starten
+sudo ./setup_iot_stack.sh
+```
+
+Dies installiert:
+- Docker & Docker Compose
+- Mosquitto MQTT-Broker
+- MariaDB Datenbank
+- Python MQTT-Subscriber
+- PHP Webserver (Dashboard)
+
+**Status prüfen:** `docker compose ps`
+
+### 2. Raspberry Pi - Access Point
+
+```bash
+cd ~/Datenkrake-Container/Raspberry/accesspoint
+sudo chmod +x setup_accesspoint.sh switch_mode.sh
+sudo ./setup_accesspoint.sh
+```
+
+Dies installiert:
+- hostapd (Access Point)
+- dnsmasq (DHCP + DNS)
+- VNC Server
+- Modus-Wechsel-Skript
+
+**Web-Interface:** `http://10.0.0.1`
+
+### 3. Arduino UNO Q
+
+1. USB-Mikrofon/Webcam anschließen
+   - Bei Dockingstation: PD-fähig, Reihenfolge beachten (Strom → Webcam → Arduino)
+2. Über Arduino App Lab `main.py` und `requirements.txt` hochladen
+3. Per SSH: `nano app.yaml` → Port 80 eintragen
 4. App (neu-)starten
-5. Web-UI öffnen: `http://<arduino-ip>`
+5. Web-UI: `http://<arduino-ip>`
 
-### Architekturübersicht
+---
+
+## Architekturübersicht
 
 ```mermaid
 flowchart TD
@@ -79,10 +113,119 @@ subgraph WIN["Windows PC"]
 end
 ```
 
-## MQTT Topics
-- `audio/spectrum` - Spektrumdaten (JSON mit label, peak_freq, peak_db, spectrum, sample_rate)
+---
 
-## Audio-Datenformat
+## VNC Einrichten (Fernzugriff auf Desktop)
+
+### VNC aktivieren
+
+```bash
+# Per raspi-config
+sudo raspi-config
+# → Interface Options → VNC → Enable
+
+# Oder per Kommandozeile
+sudo systemctl enable vncserver-x11-serviced
+sudo systemctl start vncserver-x11-serviced
+```
+
+### Mit VNC verbinden
+
+1. **VNC Viewer installieren**: [RealVNC Viewer](https://www.realvnc.com/de/connect/download/viewer/)
+2. **Verbinden**:
+   - Im AP-Modus: `10.0.0.1:5900`
+   - Im Client-Modus: IP vom Router
+3. **Login**: Pi-Benutzername & Passwort
+
+### VNC Troubleshooting
+
+```bash
+# Status prüfen
+sudo systemctl status vncserver-x11-serviced
+
+# Falls "Cannot currently show the desktop":
+sudo raspi-config
+# → Display Options → VNC Resolution → z.B. 1280x720
+```
+
+---
+
+## Modus-Wechsel (Access Point ↔ Internet)
+
+| Modus | Beschreibung | Verwendung |
+|-------|--------------|------------|
+| **Access Point** | Pi erstellt WLAN "Datenkrake" | Normalbetrieb, Sensoren verbinden |
+| **Client** | Pi verbindet mit externem WLAN | Updates, Pi-Connect, Git Pull |
+
+### Über Webinterface
+
+1. Öffne `http://10.0.0.1`
+2. Tab "📡 Verbundene Geräte"
+3. Modus wählen
+
+### Per Kommandozeile
+
+```bash
+# Access Point aktivieren
+sudo /opt/datenkrake/switch_mode.sh ap
+
+# Client/Internet aktivieren
+sudo /opt/datenkrake/switch_mode.sh client
+
+# Status anzeigen
+sudo /opt/datenkrake/switch_mode.sh status
+```
+
+### WLAN für Client-Modus konfigurieren
+
+```bash
+# Methode 1: raspi-config
+sudo raspi-config
+# → System Options → Wireless LAN
+
+# Methode 2: Per Skript
+sudo /opt/datenkrake/switch_mode.sh add "MeinWLAN" "MeinPasswort"
+```
+
+### Workflow für Updates
+
+1. Webinterface → "Client/Internet" Modus
+2. Per Pi-Connect/SSH verbinden
+3. Updates holen:
+   ```bash
+   cd ~/Datenkrake-Container
+   git pull
+   cd Raspberry/compose
+   docker compose up -d --build
+   ```
+4. Zurück zum Access Point: `sudo /opt/datenkrake/switch_mode.sh ap`
+
+---
+
+## Feste IP-Adressen vergeben
+
+Trage MAC-Adressen in `/etc/dnsmasq.d/static-hosts.conf` ein:
+
+```conf
+# Format: dhcp-host=<MAC>,<IP>,<Hostname>
+dhcp-host=AA:BB:CC:DD:EE:FF,10.0.0.20,arduino-sensor1
+dhcp-host=11:22:33:44:55:66,10.0.0.30,laptop-lehrer
+```
+
+**IP-Bereiche:**
+- `10.0.0.20-29`: Arduino/ESP-Geräte
+- `10.0.0.30-39`: Lehrer-Geräte
+- `10.0.0.40-69`: Schüler-Geräte
+- `10.0.0.70-99`: Sonstige Geräte
+
+Nach Änderungen: `sudo systemctl restart dnsmasq`
+
+---
+
+## MQTT & Datenformat
+
+**Topic:** `audio/spectrum`
+
 ```json
 {
   "label": "gut",
@@ -93,11 +236,68 @@ end
 }
 ```
 
-## Python-Skript auf Arduino (main.py)
-- Erfasst Audio über `arecord` (ALSA)
-- Berechnet FFT mit NumPy (16kHz, 2048 Samples)
-- Flask Web-UI für Spektrum-Visualisierung und Label-Auswahl
-- Sendet Daten über MQTT zum Raspberry Pi
+---
+
+## Troubleshooting
+
+### Access Point startet nicht
+
+```bash
+sudo journalctl -u hostapd -f
+sudo journalctl -u dnsmasq -f
+ip addr show wlan0
+```
+
+### WLAN nicht sichtbar
+
+```bash
+sudo systemctl status hostapd
+rfkill list
+sudo rfkill unblock wifi
+```
+
+### Gerät bekommt keine IP
+
+```bash
+sudo tail -f /var/log/dnsmasq.log
+sudo systemctl restart dnsmasq
+```
+
+### Container-Status
+
+```bash
+cd ~/Datenkrake-Container/Raspberry/compose
+docker compose ps
+docker compose logs -f
+```
+
+---
+
+## Projektstruktur
+
+```
+Datenkrake-Container/
+├── README.md                     # Diese Datei
+├── ArduinoUnoQ/
+│   └── Python/
+│       ├── main.py               # Audio-Erfassung & Web-UI
+│       └── requirements.txt
+├── Raspberry/
+│   ├── setup_iot_stack.sh        # Docker-Installation
+│   ├── accesspoint/
+│   │   ├── setup_accesspoint.sh  # AP-Installation
+│   │   ├── switch_mode.sh        # Modus-Wechsel
+│   │   ├── hostapd.conf          # WLAN-Konfiguration
+│   │   ├── dnsmasq.conf          # DHCP/DNS-Konfiguration
+│   │   └── static-hosts.conf     # Feste IP-Zuweisungen
+│   ├── compose/
+│   │   └── docker-compose.yml
+│   ├── mosquitto/                # MQTT-Broker
+│   ├── mariadb/                  # Datenbank
+│   ├── subscriber/               # MQTT→DB
+│   └── web/                      # Dashboard
+└── MCPLokalClaudDesktop/         # MCP-Server für Claude
+```
 - Läuft auf `http://<arduino-ip>:80`
 
 ## MariaDB Schema
