@@ -20,6 +20,12 @@ AP_SSID="Datenkrake"
 AP_PASSWORD="DatenkrakeAP"  # Mindestens 8 Zeichen
 AP_CHANNEL="7"
 
+# Erkennung: NetworkManager (Bookworm) oder dhcpcd (ältere Versionen)
+USE_NETWORKMANAGER=0
+if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+  USE_NETWORKMANAGER=1
+fi
+
 log() {
   echo "[AP-Setup] $1"
 }
@@ -65,15 +71,31 @@ configure_interface() {
   # Deaktiviere wpa_supplicant für wlan0 (kein Client-Modus)
   systemctl stop wpa_supplicant 2>/dev/null || true
   
-  # Statische IP für wlan0 in dhcpcd.conf
-  if ! grep -q "interface ${WLAN_INTERFACE}" /etc/dhcpcd.conf; then
-    cat >> /etc/dhcpcd.conf << EOF
+  if [[ ${USE_NETWORKMANAGER} -eq 1 ]]; then
+    log "Erkannt: NetworkManager (Raspberry Pi OS Bookworm)"
+    
+    # NetworkManager soll wlan0 ignorieren (wird von hostapd verwaltet)
+    cat > /etc/NetworkManager/conf.d/99-datenkrake-ap.conf << EOF
+[keyfile]
+unmanaged-devices=interface-name:${WLAN_INTERFACE}
+EOF
+    
+    # NetworkManager neu laden
+    nmcli general reload 2>/dev/null || systemctl reload NetworkManager 2>/dev/null || true
+    
+  else
+    log "Erkannt: dhcpcd (älteres Raspberry Pi OS)"
+    
+    # Statische IP für wlan0 in dhcpcd.conf
+    if ! grep -q "interface ${WLAN_INTERFACE}" /etc/dhcpcd.conf 2>/dev/null; then
+      cat >> /etc/dhcpcd.conf << EOF
 
 # Datenkrake Access Point Konfiguration
 interface ${WLAN_INTERFACE}
     static ip_address=${AP_IP}/24
     nohook wpa_supplicant
 EOF
+    fi
   fi
   
   # Interface sofort konfigurieren
@@ -249,7 +271,16 @@ install_mode_switcher() {
 start_services() {
   log "Starte Dienste..."
   
-  systemctl restart dhcpcd
+  if [[ ${USE_NETWORKMANAGER} -eq 1 ]]; then
+    # NetworkManager: wlan0 manuell konfigurieren
+    ip addr flush dev ${WLAN_INTERFACE} 2>/dev/null || true
+    ip addr add ${AP_IP}/24 dev ${WLAN_INTERFACE} 2>/dev/null || true
+    ip link set ${WLAN_INTERFACE} up
+  else
+    # dhcpcd: Dienst neu starten
+    systemctl restart dhcpcd 2>/dev/null || true
+  fi
+  
   sleep 2
   systemctl restart dnsmasq
   sleep 1

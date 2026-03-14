@@ -14,6 +14,12 @@ CLIENT_SSID="${DATENKRAKE_CLIENT_SSID:-}"
 CLIENT_PASSWORD="${DATENKRAKE_CLIENT_PASSWORD:-}"
 WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
 
+# Erkennung: NetworkManager (Bookworm) oder dhcpcd (ältere Versionen)
+USE_NETWORKMANAGER=0
+if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+  USE_NETWORKMANAGER=1
+fi
+
 log() {
     echo "[Mode-Switch] $1"
     logger -t datenkrake-mode "$1"
@@ -33,6 +39,17 @@ enable_ap_mode() {
     
     # Client-Modus Dienste stoppen
     systemctl stop wpa_supplicant 2>/dev/null || true
+    
+    if [[ ${USE_NETWORKMANAGER} -eq 1 ]]; then
+        # NetworkManager soll wlan0 ignorieren
+        mkdir -p /etc/NetworkManager/conf.d
+        cat > /etc/NetworkManager/conf.d/99-datenkrake-ap.conf << EOF
+[keyfile]
+unmanaged-devices=interface-name:${WLAN_INTERFACE}
+EOF
+        nmcli general reload 2>/dev/null || systemctl reload NetworkManager 2>/dev/null || true
+        nmcli device disconnect ${WLAN_INTERFACE} 2>/dev/null || true
+    fi
     
     # DHCP für wlan0 deaktivieren (statische IP)
     ip addr flush dev ${WLAN_INTERFACE} 2>/dev/null || true
@@ -58,19 +75,34 @@ enable_client_mode() {
     # IP-Konfiguration zurücksetzen
     ip addr flush dev ${WLAN_INTERFACE} 2>/dev/null || true
     
-    # wpa_supplicant Konfiguration prüfen
-    if [[ ! -f "$WPA_CONF" ]] || ! grep -q "ssid=" "$WPA_CONF"; then
-        log "FEHLER: Keine WLAN-Konfiguration in $WPA_CONF"
-        log "Bitte erst WLAN konfigurieren: sudo raspi-config"
-        echo "error" > "$MODE_FILE"
-        exit 1
+    if [[ ${USE_NETWORKMANAGER} -eq 1 ]]; then
+        log "Verwende NetworkManager für WLAN-Verbindung..."
+        
+        # NetworkManager wlan0 wieder verwalten lassen
+        rm -f /etc/NetworkManager/conf.d/99-datenkrake-ap.conf 2>/dev/null || true
+        nmcli general reload 2>/dev/null || systemctl reload NetworkManager 2>/dev/null || true
+        
+        # Warten auf automatische Verbindung
+        sleep 3
+        nmcli device connect ${WLAN_INTERFACE} 2>/dev/null || true
+        
+    else
+        # Älteres System mit wpa_supplicant/dhcpcd
+        
+        # wpa_supplicant Konfiguration prüfen
+        if [[ ! -f "$WPA_CONF" ]] || ! grep -q "ssid=" "$WPA_CONF"; then
+            log "FEHLER: Keine WLAN-Konfiguration in $WPA_CONF"
+            log "Bitte erst WLAN konfigurieren: sudo raspi-config"
+            echo "error" > "$MODE_FILE"
+            exit 1
+        fi
+        
+        # Client-Modus aktivieren
+        systemctl start wpa_supplicant 2>/dev/null || true
+        
+        # DHCP für wlan0 aktivieren
+        systemctl restart dhcpcd 2>/dev/null || true
     fi
-    
-    # Client-Modus aktivieren
-    systemctl start wpa_supplicant 2>/dev/null || true
-    
-    # DHCP für wlan0 aktivieren
-    systemctl restart dhcpcd 2>/dev/null || true
     
     # Warten auf Verbindung
     log "Warte auf WLAN-Verbindung..."
@@ -128,10 +160,18 @@ show_status() {
 # Bekannte WLANs auflisten
 list_known_networks() {
     echo "["
-    if [[ -f "$WPA_CONF" ]]; then
-        grep -oP 'ssid="\K[^"]+' "$WPA_CONF" 2>/dev/null | while read ssid; do
+    if [[ ${USE_NETWORKMANAGER} -eq 1 ]]; then
+        # NetworkManager: gespeicherte Verbindungen
+        nmcli -t -f NAME,TYPE connection show 2>/dev/null | grep ':wifi$' | cut -d: -f1 | while read ssid; do
             echo "  \"$ssid\","
         done | sed '$ s/,$//'
+    else
+        # wpa_supplicant Konfiguration
+        if [[ -f "$WPA_CONF" ]]; then
+            grep -oP 'ssid="\K[^"]+' "$WPA_CONF" 2>/dev/null | while read ssid; do
+                echo "  \"$ssid\","
+            done | sed '$ s/,$//'
+        fi
     fi
     echo "]"
 }
@@ -148,18 +188,29 @@ add_network() {
     
     log "Füge WLAN hinzu: $ssid"
     
-    # wpa_passphrase nutzen für sicheren Hash
-    if [[ -n "$password" ]]; then
-        wpa_passphrase "$ssid" "$password" >> "$WPA_CONF"
+    if [[ ${USE_NETWORKMANAGER} -eq 1 ]]; then
+        # NetworkManager: nmcli verwenden
+        if [[ -n "$password" ]]; then
+            nmcli device wifi connect "$ssid" password "$password" 2>/dev/null || \
+            nmcli connection add type wifi con-name "$ssid" ssid "$ssid" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$password"
+        else
+            nmcli device wifi connect "$ssid" 2>/dev/null || \
+            nmcli connection add type wifi con-name "$ssid" ssid "$ssid"
+        fi
     else
-        # Offenes Netzwerk
-        cat >> "$WPA_CONF" << EOF
+        # Älteres System: wpa_supplicant
+        if [[ -n "$password" ]]; then
+            wpa_passphrase "$ssid" "$password" >> "$WPA_CONF"
+        else
+            # Offenes Netzwerk
+            cat >> "$WPA_CONF" << EOF
 
 network={
     ssid="$ssid"
     key_mgmt=NONE
 }
 EOF
+        fi
     fi
     
     log "WLAN '$ssid' hinzugefügt"
