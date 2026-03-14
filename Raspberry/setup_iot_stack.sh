@@ -107,7 +107,20 @@ EOF
   log "Systemd service enabled for automatic startup"
 }
 
+setup_accesspoint() {
+  local ap_script="${SCRIPT_DIR}/accesspoint/setup_accesspoint.sh"
+  if [[ -f "${ap_script}" ]]; then
+    log "Setting up WLAN Access Point (Datenkrake)"
+    chmod +x "${ap_script}"
+    bash "${ap_script}"
+  else
+    log "Access Point setup script not found, skipping"
+  fi
+}
+
 install_docker
 prepare_directories
+setup_accesspoint
 build_and_start
+setup_systemd_service
 post_install_notes
