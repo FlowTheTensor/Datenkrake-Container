@@ -4,13 +4,15 @@ Dieses Projekt erfasst Audio-Spektrumdaten über ein USB-Mikrofon/Webcam am Ardu
 
 Der Raspberry Pi arbeitet als **WLAN Access Point** ("Datenkrake") und spannt ein lokales Netzwerk ohne Internet auf.
 
-## Komponenten
+## Benötigte Komponenten
 
 | Komponente | Funktion |
 |------------|----------|
-| **Arduino UNO Q** | Audio-Erfassung, FFT-Analyse, Web-UI für Training & Inferenz |
-| **Raspberry Pi** | Access Point, MQTT-Broker, Datenbank, Dashboard |
-| **Docker Container** | Mosquitto, MariaDB, Python-Subscriber, Webserver |
+| **PC z.B. mit Windows** | Remotezugriff per VNC z.B. mit [RealVNC Download](https://www.realvnc.com/en/connect/download/viewer/), zum Aufrufen der Websites, MCP zum Chatten mit der Datenbank |
+| **Raspberry Pi mit Netzteil und SD-Card** | Datenkrake: Access Point, MQTT-Broker, Datenbank, Dashboard |
+| **einer oder mehrere Arduino UNO Q** | Audio-Erfassung, FFT-Analyse, Web-UI für Training & Inferenz |
+| **je ein USB-C Netzteil, Dockingstation und USB-WebCam** | Zum Anschließen an den Arduino Uno Q|
+
 
 ![alt text](Images/image-1.png)
 ![alt text](Images/image.png)
@@ -49,26 +51,15 @@ Dies installiert:
 - MariaDB Datenbank
 - Python MQTT-Subscriber
 - PHP Webserver (Dashboard)
-
-**Status prüfen:** `docker compose ps`
-
-### 2. Raspberry Pi - Access Point
-
-```bash
-cd ~/Datenkrake-Container/Raspberry/accesspoint
-sudo chmod +x setup_accesspoint.sh switch_mode.sh
-sudo ./setup_accesspoint.sh
-```
-
-Dies installiert:
 - hostapd (Access Point)
 - dnsmasq (DHCP + DNS)
 - VNC Server
 - Modus-Wechsel-Skript
 
+**Status prüfen:** `docker compose ps`
 **Web-Interface:** `http://10.0.0.1`
 
-### 3. Arduino UNO Q
+### 2. Arduino UNO Q
 
 1. USB-Mikrofon/Webcam anschließen
    - Bei Dockingstation: PD-fähig, Reihenfolge beachten (Strom → Webcam → Arduino)
@@ -98,6 +89,7 @@ subgraph AQ["🎤 Arduino UNO Q"]
 end
 MQTT -->|JSON Spektrumdaten| MQ
 subgraph RPi["Raspberry Pi (Datenkrake)"]
+  AP["WLAN AccessPoint mit DCHP und DNS. SSID: Datenkrake, PW: DatenkrakeAP"]
   MQ["Mosquitto Broker (Container)"]
   WEBS["Webserver (Container) zur Datenbankkontrolle http://datenkrake.local"]
   MQ -->|Topic audio/spectrum| SUB["Python Subscriber (Container)"]

@@ -111,16 +111,25 @@ setup_accesspoint() {
   local ap_script="${SCRIPT_DIR}/accesspoint/setup_accesspoint.sh"
   if [[ -f "${ap_script}" ]]; then
     log "Setting up WLAN Access Point (Datenkrake)"
+    log "HINWEIS: Nach dem AP-Setup ist keine Internetverbindung mehr möglich!"
     chmod +x "${ap_script}"
-    bash "${ap_script}"
+    # --auto Flag für nicht-interaktive Installation
+    bash "${ap_script}" --auto
   else
     log "Access Point setup script not found, skipping"
   fi
 }
 
+# =============================================================================
+# WICHTIG: Reihenfolge beachten!
+# 1. Erst alles was Internet braucht (Docker, Images)
+# 2. DANN erst Access Point (kappt Internet)
+# =============================================================================
+
 install_docker
 prepare_directories
-setup_accesspoint
 build_and_start
 setup_systemd_service
+# Access Point ZULETZT - danach kein Internet mehr!
+setup_accesspoint
 post_install_notes

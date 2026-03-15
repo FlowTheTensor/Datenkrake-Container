@@ -10,6 +10,12 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+# --auto Flag für nicht-interaktive Installation (von setup_iot_stack.sh)
+AUTO_MODE=0
+if [[ "${1:-}" == "--auto" ]]; then
+  AUTO_MODE=1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WLAN_INTERFACE="wlan0"
 AP_IP="10.0.0.1"
@@ -301,11 +307,16 @@ main() {
   echo "============================================"
   echo ""
   
-  read -p "Fortfahren? (j/n) " -n 1 -r
-  echo ""
-  if [[ ! $REPLY =~ ^[JjYy]$ ]]; then
-    echo "Abgebrochen."
-    exit 0
+  # Bei --auto keine Bestätigung erforderlich
+  if [[ ${AUTO_MODE} -eq 0 ]]; then
+    read -p "Fortfahren? (j/n) " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[JjYy]$ ]]; then
+      echo "Abgebrochen."
+      exit 0
+    fi
+  else
+    log "Auto-Modus: Überspringe Bestätigung"
   fi
   
   install_packages
