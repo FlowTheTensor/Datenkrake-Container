@@ -132,4 +132,26 @@ build_and_start
 setup_systemd_service
 # Access Point ZULETZT - danach kein Internet mehr!
 setup_accesspoint
+setup_wayvnc_autostart
 post_install_notes
+
+# wayvnc Autostart für Desktop-User einrichten
+setup_wayvnc_autostart() {
+  local user_home
+  user_home=$(eval echo "~${TARGET_USER}")
+  mkdir -p "${user_home}/.config/autostart"
+  cat > "${user_home}/.config/autostart/wayvnc.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=wayvnc
+Comment=VNC Server for Wayland
+Exec=wayvnc 0.0.0.0 5900
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF
+  chown -R "${TARGET_USER}:${TARGET_USER}" "${user_home}/.config/autostart"
+  # User-Lingering aktivieren (damit Autostart auch ohne Login funktioniert)
+  loginctl enable-linger "${TARGET_USER}" 2>/dev/null || true
+  log "wayvnc Autostart für ${TARGET_USER} eingerichtet."
+}

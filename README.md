@@ -8,7 +8,7 @@ Der Raspberry Pi arbeitet als **WLAN Access Point** ("Datenkrake") und spannt ei
 
 | Komponente | Funktion |
 |------------|----------|
-| **PC z.B. mit Windows** | Remotezugriff per VNC (z.B. [RealVNC Viewer](https://www.realvnc.com/en/connect/download/viewer/), zum Aufrufen der Websites, MCP zum Chatten mit der Datenbank |
+| **PC z.B. mit Windows** | Remotezugriff per VNC (z.B. [RealVNC Viewer](https://www.realvnc.com/en/connect/download/viewer/)), zum Aufrufen der Websites, MCP zum Chatten mit der Datenbank |
 | **Raspberry Pi mit Netzteil und SD-Card** | Datenkrake: Access Point, MQTT-Broker, Datenbank, Dashboard, getestet mit Pi5 und Trixie |
 | **einer oder mehrere Arduino UNO Q** | Audio-Erfassung, FFT-Analyse, Web-UI für Training & Inferenz |
 | **je ein USB-C Netzteil, Dockingstation und USB-WebCam** | Zum Anschließen an den Arduino Uno Q|
@@ -93,7 +93,7 @@ subgraph AQ["🎤 Arduino UNO Q"]
 end
 MQTT -->|JSON Spektrumdaten| MQ
 subgraph RPi["Raspberry Pi (Datenkrake)"]
-  AP["WLAN AccessPoint mit DCHP und DNS. SSID: Datenkrake, PW: DatenkrakeAP"]
+  AP["WLAN AccessPoint mit DCHP und DNS. SSID: Datenkrake, PW: DatenkrakeAP und wayvnc für Fernzugriff"]
   MQ["Mosquitto Broker (Container)"]
   WEBS["Webserver (Container) zur Datenbankkontrolle http://datenkrake.local"]
   MQ -->|Topic audio/spectrum| SUB["Python Subscriber (Container)"]
@@ -114,14 +114,6 @@ end
 ## VNC Einrichten (Fernzugriff auf Desktop)
 
 Der Pi verwendet **wayvnc** für Wayland-kompatiblen Fernzugriff (Raspberry Pi OS Bookworm).
-
-### VNC-Zugangsdaten
-
-| Einstellung | Wert |
-|-------------|------|
-| **Adresse** | 10.0.0.1:5900 |
-| **Benutzername** | datenkrake |
-| **Passwort** | datenkrake |
 
 ### wayvnc manuell starten
 
@@ -232,15 +224,7 @@ Trage MAC-Adressen in `/etc/dnsmasq.d/static-hosts.conf` ein:
 ```conf
 # Format: dhcp-host=<MAC>,<IP>,<Hostname>
 dhcp-host=AA:BB:CC:DD:EE:FF,10.0.0.20,arduino-sensor1
-dhcp-host=11:22:33:44:55:66,10.0.0.30,laptop-lehrer
 ```
-
-**IP-Bereiche:**
-- `10.0.0.20-29`: Arduino/ESP-Geräte
-- `10.0.0.30-39`: Lehrer-Geräte
-- `10.0.0.40-69`: Schüler-Geräte
-- `10.0.0.70-99`: Sonstige Geräte
-
 Nach Änderungen: `sudo systemctl restart dnsmasq`
 
 ---
@@ -490,8 +474,3 @@ end
 | MCP-Server erscheint nicht in Claude | `claude_desktop_config.json` Syntax prüfen; Claude neu starten |
 | `ModuleNotFoundError: mcp` | `pip install mcp[cli]` ausführen |
 
-
-## Nächste Schritte
-- Anomalie-Modell mit gesammelten Spektrumdaten trainieren
-- Echtzeit-Inferenz auf Arduino implementieren
-- Alarm-System bei erkannten Anomalien
