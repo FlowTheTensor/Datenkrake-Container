@@ -8,8 +8,8 @@ Der Raspberry Pi arbeitet als **WLAN Access Point** ("Datenkrake") und spannt ei
 
 | Komponente | Funktion |
 |------------|----------|
-| **PC z.B. mit Windows** | Remotezugriff per VNC z.B. mit [RealVNC Download](https://www.realvnc.com/en/connect/download/viewer/), zum Aufrufen der Websites, MCP zum Chatten mit der Datenbank |
-| **Raspberry Pi mit Netzteil und SD-Card** | Datenkrake: Access Point, MQTT-Broker, Datenbank, Dashboard |
+| **PC z.B. mit Windows** | Remotezugriff per VNC (z.B. [RealVNC Viewer](https://www.realvnc.com/en/connect/download/viewer/), zum Aufrufen der Websites, MCP zum Chatten mit der Datenbank |
+| **Raspberry Pi mit Netzteil und SD-Card** | Datenkrake: Access Point, MQTT-Broker, Datenbank, Dashboard, getestet mit Pi5 und Trixie |
 | **einer oder mehrere Arduino UNO Q** | Audio-Erfassung, FFT-Analyse, Web-UI für Training & Inferenz |
 | **je ein USB-C Netzteil, Dockingstation und USB-WebCam** | Zum Anschließen an den Arduino Uno Q|
 
@@ -29,6 +29,8 @@ Der Raspberry Pi arbeitet als **WLAN Access Point** ("Datenkrake") und spannt ei
 | **Gateway (Pi)** | 10.0.0.1 |
 | **DHCP-Bereich** | 10.0.0.10 - 10.0.0.254 |
 | **VNC-Port** | 5900 |
+| **VNC-User** | datenkrake |
+| **VNC-Passwort** | datenkrake |
 
 ---
 
@@ -53,8 +55,10 @@ Dies installiert:
 - PHP Webserver (Dashboard)
 - hostapd (Access Point)
 - dnsmasq (DHCP + DNS)
-- VNC Server
+- wayvnc (VNC Server für Wayland)
 - Modus-Wechsel-Skript
+
+**Hinweis:** Das Setup installiert zuerst alles was Internet benötigt (Docker, Images), danach wird der Access Point aktiviert (kappt Internet-Verbindung).
 
 **Status prüfen:** `docker compose ps`
 **Web-Interface:** `http://10.0.0.1`
@@ -109,36 +113,63 @@ end
 
 ## VNC Einrichten (Fernzugriff auf Desktop)
 
-### VNC aktivieren
+Der Pi verwendet **wayvnc** für Wayland-kompatiblen Fernzugriff (Raspberry Pi OS Bookworm).
+
+### VNC-Zugangsdaten
+
+| Einstellung | Wert |
+|-------------|------|
+| **Adresse** | 10.0.0.1:5900 |
+| **Benutzername** | datenkrake |
+| **Passwort** | datenkrake |
+
+### wayvnc manuell starten
 
 ```bash
-# Per raspi-config
-sudo raspi-config
-# → Interface Options → VNC → Enable
+# Falls wayvnc nicht läuft (per SSH):
+wayvnc 0.0.0.0 5900 &
 
-# Oder per Kommandozeile
-sudo systemctl enable vncserver-x11-serviced
-sudo systemctl start vncserver-x11-serviced
+# Prüfen ob wayvnc läuft:
+pgrep wayvnc && echo "wayvnc läuft" || echo "wayvnc nicht aktiv"
 ```
 
 ### Mit VNC verbinden
 
-1. **VNC Viewer installieren**: [RealVNC Viewer](https://www.realvnc.com/de/connect/download/viewer/)
+1. **VNC Viewer installieren**: [RealVNC Viewer](https://www.realvnc.com/de/connect/download/viewer/) oder TigerVNC
 2. **Verbinden**:
-   - Im AP-Modus: `10.0.0.1:5900`
-   - Im Client-Modus: IP vom Router
-3. **Login**: Pi-Benutzername & Passwort
+   - Adresse: `10.0.0.1:5900`
+   - Benutzername: `datenkrake`
+   - Passwort: `datenkrake`
 
 ### VNC Troubleshooting
 
 ```bash
-# Status prüfen
-sudo systemctl status vncserver-x11-serviced
+# Prüfen ob wayvnc läuft
+pgrep wayvnc
 
-# Falls "Cannot currently show the desktop":
-sudo raspi-config
-# → Display Options → VNC Resolution → z.B. 1280x720
+# wayvnc manuell starten (im Kontext des Desktop-Users)
+wayvnc 0.0.0.0 5900 &
+
+# Falls nur schwarzer Bildschirm: Desktop-Session nötig
+# wayvnc funktioniert nur mit laufender Wayland-Session
 ```
+
+### Headless-Betrieb (kein Monitor)
+
+Falls der Pi ohne Monitor läuft, VNC Resolution in `/boot/firmware/config.txt` setzen:
+
+```bash
+sudo nano /boot/firmware/config.txt
+```
+
+Hinzufügen:
+```
+hdmi_force_hotplug=1
+hdmi_group=2
+hdmi_mode=82
+```
+
+Danach: `sudo reboot`
 
 ---
 

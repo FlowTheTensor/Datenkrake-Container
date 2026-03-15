@@ -40,34 +40,75 @@ log() {
 install_packages() {
   log "Installiere benötigte Pakete..."
   apt-get update
-  apt-get install -y hostapd dnsmasq iptables realvnc-vnc-server
+  apt-get install -y hostapd dnsmasq iptables wayvnc
   
   # Dienste stoppen für Konfiguration
   systemctl stop hostapd 2>/dev/null || true
   systemctl stop dnsmasq 2>/dev/null || true
 }
 
-# VNC Server einrichten
+# VNC Server einrichten (wayvnc für Wayland/Bookworm)
 configure_vnc() {
-  log "Konfiguriere VNC Server..."
+  log "Konfiguriere wayvnc Server..."
   
-  # VNC Server aktivieren
-  systemctl enable vncserver-x11-serviced 2>/dev/null || true
-  systemctl start vncserver-x11-serviced 2>/dev/null || true
+  local TARGET_USER_HOME
+  TARGET_USER_HOME=$(eval echo "~${SUDO_USER:-pi}")
+  local VNC_USER="${SUDO_USER:-pi}"
   
-  # Falls RealVNC nicht verfügbar, TigerVNC als Fallback
-  if ! systemctl is-active --quiet vncserver-x11-serviced; then
-    log "RealVNC nicht verfügbar, installiere TigerVNC..."
-    apt-get install -y tigervnc-standalone-server tigervnc-common
-    
-    # VNC Passwort setzen (interaktiv oder Standard)
-    mkdir -p /home/${SUDO_USER:-pi}/.vnc
-    echo "datenkrake" | vncpasswd -f > /home/${SUDO_USER:-pi}/.vnc/passwd 2>/dev/null || true
-    chmod 600 /home/${SUDO_USER:-pi}/.vnc/passwd 2>/dev/null || true
-    chown -R ${SUDO_USER:-pi}:${SUDO_USER:-pi} /home/${SUDO_USER:-pi}/.vnc 2>/dev/null || true
-  fi
+  # wayvnc Konfigurationsverzeichnis
+  mkdir -p "${TARGET_USER_HOME}/.config/wayvnc"
   
-  log "VNC Server eingerichtet"
+  # wayvnc Konfiguration erstellen
+  cat > "${TARGET_USER_HOME}/.config/wayvnc/config" << EOF
+# Datenkrake wayvnc Konfiguration
+address=0.0.0.0
+port=5900
+enable_auth=true
+username=datenkrake
+password=datenkrake
+EOF
+  
+  chown -R "${VNC_USER}:${VNC_USER}" "${TARGET_USER_HOME}/.config/wayvnc"
+  chmod 600 "${TARGET_USER_HOME}/.config/wayvnc/config"
+  
+  # Systemd User-Service für wayvnc erstellen
+  mkdir -p "${TARGET_USER_HOME}/.config/systemd/user"
+  cat > "${TARGET_USER_HOME}/.config/systemd/user/wayvnc.service" << EOF
+[Unit]
+Description=wayvnc VNC Server
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/wayvnc 0.0.0.0 5900
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+  
+  chown -R "${VNC_USER}:${VNC_USER}" "${TARGET_USER_HOME}/.config/systemd"
+  
+  # Autostart für wayvnc im Desktop
+  mkdir -p "${TARGET_USER_HOME}/.config/autostart"
+  cat > "${TARGET_USER_HOME}/.config/autostart/wayvnc.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=wayvnc
+Comment=VNC Server for Wayland
+Exec=/usr/bin/wayvnc 0.0.0.0 5900
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF
+  
+  chown -R "${VNC_USER}:${VNC_USER}" "${TARGET_USER_HOME}/.config/autostart"
+  
+  # User-Lingering aktivieren (Services starten ohne Login)
+  loginctl enable-linger "${VNC_USER}" 2>/dev/null || true
+  
+  log "wayvnc eingerichtet - User: datenkrake, Passwort: datenkrake, Port: 5900"
 }
 
 # Netzwerk-Interface konfigurieren
@@ -340,7 +381,11 @@ main() {
   echo "  Pi-IP:     ${AP_IP}"
   echo ""
   echo "  Webinterface: http://${AP_IP}"
-  echo "  VNC:          ${AP_IP}:5900"
+  echo ""
+  echo "  VNC (wayvnc):"
+  echo "    Adresse:  ${AP_IP}:5900"
+  echo "    User:     datenkrake"
+  echo "    Passwort: datenkrake"
   echo ""
   echo "  Modus wechseln:"
   echo "    sudo /opt/datenkrake/switch_mode.sh client  # Internet/Pi-Connect"
@@ -349,7 +394,7 @@ main() {
   echo "  Status prüfen:"
   echo "    systemctl status hostapd"
   echo "    systemctl status dnsmasq"
-  echo "    systemctl status vncserver-x11-serviced"
+  echo "    pgrep wayvnc && echo 'wayvnc läuft'"
   echo ""
   echo "  Verbundene Geräte:"
   echo "    cat /var/lib/misc/dnsmasq.leases"
