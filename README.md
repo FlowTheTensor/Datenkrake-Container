@@ -8,7 +8,7 @@ Der Raspberry Pi arbeitet als **WLAN Access Point** ("Datenkrake") und spannt ei
 
 | Komponente | Funktion |
 |------------|----------|
-| **PC z.B. mit Windows** | Remotezugriff per VNC (z.B. [RealVNC Viewer](https://www.realvnc.com/en/connect/download/viewer/)), zum Aufrufen der Websites, MCP zum Chatten mit der Datenbank |
+| **PC z.B. mit Windows** | Remotezugriff per VNC (z.B. [RealVNC Viewer](https://www.realvnc.com/en/connect/download/viewer/)), zum Aufrufen der Websites, MCP zum Chatten mit der Datenbank z.B. per [Claude Desktop](https://claude.com/download)|
 | **Raspberry Pi mit Netzteil und SD-Card** | Datenkrake: Access Point, MQTT-Broker, Datenbank, Dashboard, getestet mit Pi5 und Trixie |
 | **einer oder mehrere Arduino UNO Q** | Audio-Erfassung, FFT-Analyse, Web-UI für Training & Inferenz |
 | **je ein USB-C Netzteil, Dockingstation und USB-WebCam** | Zum Anschließen an den Arduino Uno Q|
