@@ -507,3 +507,7 @@ end
 | MCP-Server erscheint nicht in Claude | `claude_desktop_config.json` Syntax prüfen; Claude neu starten |
 | `ModuleNotFoundError: mcp` | `pip install mcp[cli]` ausführen |
 
+
+## Probleme ToDo
+timout von vnc und webserver im accesspoint-modus, liegt vermutlich an firewall
+
