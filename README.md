@@ -295,6 +295,39 @@ ssh pi@10.0.0.1
 # Passwort: dein Pi-Passwort (Standard: raspberry)
 ```
 
+### MariaDB Container startet nicht / "dependency db failed to start"
+
+**Fehlerbild:**
+- `Container mqtt-sql        Error dependency db failed to start`
+- `container mqtt-sql is unhealthy`
+
+**Ursache:**
+- Die Datenbank (MariaDB) ist abgestürzt oder wurde unsauber beendet (z.B. Stromausfall, harter Reset)
+- Die Datei `tc.log` im Datenverzeichnis ist korrupt
+
+**Lösung:**
+1. **Container stoppen:**
+   ```bash
+   cd ~/Datenkrake-Container/Raspberry/compose
+   docker compose down
+   ```
+2. **Korrupte tc.log löschen:**
+   ```bash
+   sudo rm -f ../mariadb/data/tc.log
+   ```
+3. **Container neu starten:**
+   ```bash
+   docker compose up -d
+   ```
+
+**Hinweis:**
+- Falls das nicht hilft, kann ein kompletter Reset des Datenverzeichnisses helfen (Achtung: Alle Daten gehen verloren!):
+   ```bash
+   sudo rm -rf ../mariadb/data/*
+   docker compose up -d
+   ```
+- Die Warnungen zu `io_uring` und `memory.pressure` sind harmlos und können ignoriert werden.
+
 ---
 
 ## Projektstruktur

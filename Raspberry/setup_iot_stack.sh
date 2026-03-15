@@ -154,6 +154,12 @@ build_and_start
 setup_systemd_service
 # Access Point ZULETZT - danach kein Internet mehr!
 setup_accesspoint
+log "Setze iptables-Regeln für WLAN-zu-Docker-Freigabe (HTTP, MQTT, DB, etc.)"
+# Erlaube FORWARD von WLAN-Subnetz (172.29.0.0/23) zu Docker-Netz (172.18.0.0/16)
+iptables -I FORWARD -s 172.29.0.0/23 -d 172.18.0.0/16 -j ACCEPT
+# NAT für Rückrouting (Masquerading)
+iptables -t nat -A POSTROUTING -s 172.29.0.0/23 -d 172.18.0.0/16 -j MASQUERADE
+# Optional: weitere Ports/Protokolle je nach Bedarf
 setup_wayvnc_autostart
 post_install_notes
 
